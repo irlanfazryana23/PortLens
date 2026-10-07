@@ -1,0 +1,66 @@
+name: Release
+# Push a tag such as v1.0.0 (see docs/RELEASING.md). The workflow checks the tag
+# against VERSION, tests, builds, verifies, and publishes a GitHub Release with
+# the portable ZIP, the EXE and SHA256SUMS.txt attached.
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write   # create the release and upload assets
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Check tag matches VERSION
+        run: |
+          $version = (Get-Content VERSION -Raw).Trim()
+          if ($env:GITHUB_REF_NAME -ne "v$version") {
+            throw "Tag $env:GITHUB_REF_NAME does not match VERSION $version. Update VERSION and CHANGELOG.md, or retag."
+          }
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements-dev.txt
+      - name: Run tests
+        run: python -m pytest
+      - name: Build
+        run: .\build.ps1 -SkipInstall
+      - name: Verify package without launching the app
+        run: .\scripts\verify.ps1
+      - name: Write release notes
+        run: .\scripts\release_notes.ps1 -OutFile release-notes.md
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = (Get-Content VERSION -Raw).Trim()
+          $assets = @(
+            "dist/PortLens-$version-portable.zip",
+            "dist/PortLens-$version.exe",
+            "dist/SHA256SUMS.txt"
+          )
+          $ErrorActionPreference = 'Continue'
+          gh release view $env:GITHUB_REF_NAME --json tagName *> $null
+          $exists = ($LASTEXITCODE -eq 0)
+          $ErrorActionPreference = 'Stop'
+          if ($exists) {
+            # A release was already created in the GitHub UI: attach the files to it.
+            gh release upload $env:GITHUB_REF_NAME @assets --clobber
+          } else {
+            gh release create $env:GITHUB_REF_NAME @assets --verify-tag --title "PortLens $version" --notes-file release-notes.md
+          }
+          if ($LASTEXITCODE -ne 0) { throw "gh release failed (exit code $LASTEXITCODE)." }

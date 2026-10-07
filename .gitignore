@@ -1,0 +1,37 @@
+# Build output and release packages
+/build/
+/dist/
+*.exe
+*.zip
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Local editor and agent state
+/.vscode/
+/.idea/
+/.kiro/
+*.user
+
+# Local configuration, signing material, and logs
+.env
+.env.*
+*.pfx
+*.p12
+*.key
+*.log
+
+# Superseded artwork kept locally, not published (assets/ holds the current files)
+/app_icon_port.ico
+/app_icon_port.png
+/app_icon_port_transparent.png
+/app_logo_header.png
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
